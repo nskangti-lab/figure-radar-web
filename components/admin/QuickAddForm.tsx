@@ -5,6 +5,7 @@ import type { ChangeEvent } from "react";
 import Link from "next/link";
 import { Save, Wand2 } from "lucide-react";
 import { quickAddProduct, type QuickAddState } from "@/lib/admin/quick-add-actions";
+import { generateProductNames } from "@/lib/admin/naming";
 import type { AdminOption } from "@/lib/types";
 
 type QuickAddFormProps = {
@@ -26,60 +27,8 @@ const initialValues: Values = {
   is_affiliate: false
 };
 
-const lineTypeLabels: Record<string, { kr: string; en: string }> = {
-  PRIZE_FIGURE: { kr: "경품 피규어", en: "Prize Figure" },
-  SCALE_FIGURE: { kr: "스케일 피규어", en: "Scale Figure" },
-  NENDOROID: { kr: "넨도로이드", en: "Nendoroid" },
-  FIGMA: { kr: "figma", en: "figma" },
-  POP_UP_PARADE: { kr: "POP UP PARADE", en: "POP UP PARADE" },
-  ACTION_FIGURE: { kr: "액션 피규어", en: "Action Figure" },
-  PLASTIC_MODEL: { kr: "프라모델", en: "Plastic Model" },
-  GOODS: { kr: "굿즈", en: "Goods" }
-};
-
-const lineTypeSlugs: Record<string, string> = {
-  PRIZE_FIGURE: "prize",
-  SCALE_FIGURE: "scale",
-  NENDOROID: "nendoroid",
-  FIGMA: "figma",
-  POP_UP_PARADE: "pop-up-parade",
-  ACTION_FIGURE: "action",
-  PLASTIC_MODEL: "plastic-model",
-  GOODS: "goods"
-};
-
-function slugify(value: string) {
-  const slug = value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return slug || `item-${Date.now()}`;
-}
-
-function valueText(value: unknown) {
-  return String(value ?? "").trim();
-}
-
-function compactJoin(parts: string[], separator = " ") {
-  return parts.map(valueText).filter(Boolean).join(separator);
-}
-
-function lineTypeLabel(lineType: unknown, locale: "kr" | "en") {
-  const key = valueText(lineType).toUpperCase();
-  return lineTypeLabels[key]?.[locale] || valueText(lineType).replace(/_/g, " ");
-}
-
-function lineTypeSlug(lineType: unknown) {
-  const key = valueText(lineType).toUpperCase();
-  return lineTypeSlugs[key] || slugify(valueText(lineType));
-}
-
-function normalizeVersionForSlug(version: string) {
-  return version
-    .replace(/\s+(Ver\.?|ver\.?)$/i, "")
-    .replace(/\s*(Version|version|버전)$/i, "")
-    .trim();
+function textValue(value: unknown) {
+  return String(value ?? "");
 }
 
 export function QuickAddForm({ shops }: QuickAddFormProps) {
@@ -100,57 +49,31 @@ export function QuickAddForm({ shops }: QuickAddFormProps) {
   }
 
   function generateStandardNames() {
-    const lineKr = lineTypeLabel(values.line_type, "kr");
-    const lineEn = lineTypeLabel(values.line_type, "en");
-    const workKr = valueText(values.work_name_kr);
-    const workJp = valueText(values.work_name_jp) || workKr;
-    const workEn = valueText(values.work_name_en) || valueText(values.work_slug) || workKr;
-    const characterKr = valueText(values.character_name_kr);
-    const characterJp = valueText(values.character_name_jp) || characterKr;
-    const characterEn =
-      valueText(values.character_name_en) || valueText(values.character_slug) || characterKr;
-    const manufacturerKr = valueText(values.manufacturer_name_kr);
-    const manufacturerJp = valueText(values.manufacturer_name_jp) || manufacturerKr;
-    const manufacturerEn =
-      valueText(values.manufacturer_name_en) ||
-      valueText(values.manufacturer_slug) ||
-      manufacturerKr;
-    const versionKr = valueText(values.version_name_kr);
-    const versionJp = valueText(values.version_name_jp);
-    const versionEn = valueText(values.version_name_en);
-
-    const displayNameKr = `${workKr} - ${compactJoin([
-      characterKr,
-      versionKr,
-      lineKr
-    ])} - ${manufacturerKr}`;
-    const canonicalNameJp = `${workJp} - ${compactJoin([
-      characterJp,
-      versionJp
-    ])} - ${lineEn} - ${manufacturerJp}`;
-    const displayNameEn = `${workEn} - ${compactJoin([
-      characterEn,
-      versionEn,
-      lineEn
-    ])} - ${manufacturerEn}`;
-    const versionSlugSource = normalizeVersionForSlug(versionEn || versionKr);
-    const slug = [
-      values.work_slug || workEn,
-      values.character_slug || characterEn,
-      versionSlugSource,
-      lineTypeSlug(values.line_type),
-      values.manufacturer_slug || manufacturerEn
-    ]
-      .map((part) => slugify(valueText(part)))
-      .filter(Boolean)
-      .join("-");
+    const generated = generateProductNames({
+      workKr: textValue(values.work_name_kr),
+      workJp: textValue(values.work_name_jp),
+      workEn: textValue(values.work_name_en),
+      workSlug: textValue(values.work_slug),
+      characterKr: textValue(values.character_name_kr),
+      characterJp: textValue(values.character_name_jp),
+      characterEn: textValue(values.character_name_en),
+      characterSlug: textValue(values.character_slug),
+      manufacturerKr: textValue(values.manufacturer_name_kr),
+      manufacturerJp: textValue(values.manufacturer_name_jp),
+      manufacturerEn: textValue(values.manufacturer_name_en),
+      manufacturerSlug: textValue(values.manufacturer_slug),
+      versionKr: textValue(values.version_name_kr),
+      versionJp: textValue(values.version_name_jp),
+      versionEn: textValue(values.version_name_en),
+      lineType: textValue(values.line_type)
+    });
 
     setValues((current) => ({
       ...current,
-      display_name_kr: displayNameKr,
-      canonical_name_jp: canonicalNameJp,
-      display_name_en: displayNameEn,
-      product_group_slug: slug
+      display_name_kr: generated.displayNameKr,
+      canonical_name_jp: generated.canonicalNameJp,
+      display_name_en: generated.displayNameEn,
+      product_group_slug: generated.slug
     }));
   }
 

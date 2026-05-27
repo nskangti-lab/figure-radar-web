@@ -39,7 +39,7 @@ export const adminEntities: Record<AdminEntityKey, AdminEntityConfig> = {
       { name: "name_en", label: "Name EN" },
       { name: "slug", label: "Slug", required: true }
     ],
-    titleFields: ["name_kr", "name_jp", "name_en", "slug"],
+    titleFields: ["name_kr"],
     listColumns: ["name_kr", "name_jp", "name_en", "slug"]
   },
   characters: {
@@ -54,7 +54,7 @@ export const adminEntities: Record<AdminEntityKey, AdminEntityConfig> = {
       { name: "name_en", label: "Name EN" },
       { name: "slug", label: "Slug", required: true }
     ],
-    titleFields: ["name_kr", "name_jp", "name_en", "slug"],
+    titleFields: ["name_kr"],
     listColumns: ["name_kr", "name_jp", "name_en", "slug", "work_id"]
   },
   manufacturers: {
@@ -69,7 +69,7 @@ export const adminEntities: Record<AdminEntityKey, AdminEntityConfig> = {
       { name: "slug", label: "Slug", required: true },
       { name: "official_url", label: "Official URL", type: "url" }
     ],
-    titleFields: ["name_kr", "name_jp", "name_en", "slug"],
+    titleFields: ["name_kr"],
     listColumns: ["name_kr", "name_jp", "name_en", "slug", "official_url"]
   },
   shops: {
@@ -86,7 +86,7 @@ export const adminEntities: Record<AdminEntityKey, AdminEntityConfig> = {
       { name: "is_trusted", label: "Trusted", type: "checkbox" },
       { name: "is_active", label: "Active", type: "checkbox" }
     ],
-    titleFields: ["name", "slug"],
+    titleFields: ["name"],
     listColumns: [
       "slug",
       "shop_type",
@@ -116,7 +116,7 @@ export const adminEntities: Record<AdminEntityKey, AdminEntityConfig> = {
       { name: "version_name_jp", label: "Version Name JP" },
       { name: "version_name_en", label: "Version Name EN" }
     ],
-    titleFields: ["display_name_kr", "canonical_name_jp", "slug"],
+    titleFields: ["display_name_kr"],
     listColumns: ["canonical_name_jp", "line_type", "product_type", "scale", "status"]
   },
   product_variants: {
@@ -133,7 +133,7 @@ export const adminEntities: Record<AdminEntityKey, AdminEntityConfig> = {
       { name: "release_month_jp", label: "Release Month JP", type: "month" },
       { name: "official_price_jpy", label: "Official Price JPY", type: "number" }
     ],
-    titleFields: ["variant_label_kr", "jan_code", "edition_type", "id"],
+    titleFields: ["variant_label_kr", "jan_code", "id"],
     listColumns: ["edition_type", "condition_type", "release_month_jp", "official_price_jpy"]
   },
   shop_listings: {
@@ -156,7 +156,7 @@ export const adminEntities: Record<AdminEntityKey, AdminEntityConfig> = {
       { name: "listing_url", label: "Listing URL", type: "url", required: true },
       { name: "affiliate_url", label: "Affiliate URL", type: "url" }
     ],
-    titleFields: ["raw_shop_name", "listing_url", "id"],
+    titleFields: ["raw_shop_name"],
     listColumns: [
       "raw_shop_name",
       "shop",
@@ -180,6 +180,7 @@ export const adminEntities: Record<AdminEntityKey, AdminEntityConfig> = {
 
 export const adminNav = [
   { href: "/admin/quick-add", label: "Quick Add" },
+  { href: "/admin/bulk-add", label: "Bulk Add" },
   { href: "/admin/works", label: "Works" },
   { href: "/admin/characters", label: "Characters" },
   { href: "/admin/manufacturers", label: "Manufacturers" },

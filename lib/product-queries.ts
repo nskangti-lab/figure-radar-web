@@ -1,6 +1,6 @@
-import { getPublicSupabase } from "@/lib/supabase/server";
+import { getPublicSupabase, getServiceSupabase } from "@/lib/supabase/server";
 import type { AnyRecord, ProductCardItem } from "@/lib/types";
-import { asString, optionLabel } from "@/lib/format";
+import { asString, optionLabel, relationName } from "@/lib/format";
 
 type ProductSearchArgs = {
   q?: string;
@@ -39,12 +39,18 @@ function asRecord(value: unknown): AnyRecord | null {
   return null;
 }
 
+function getReadSupabase() {
+  return getServiceSupabase() ?? getPublicSupabase();
+}
+
 function productGroupToCard(group: AnyRecord): ProductCardItem {
   return {
     ...group,
     product_group_id: asString(group.id),
     display_name_kr: asString(group.display_name_kr),
     canonical_name_jp: asString(group.canonical_name_jp),
+    manufacturer_name_kr:
+      asString(group.manufacturer_name_kr) || relationName(group.manufacturers, ["name_kr", "name"]),
     slug: asString(group.slug),
     line_type: asString(group.line_type),
     product_type: asString(group.product_type),
@@ -76,8 +82,155 @@ function dedupeProducts(items: ProductCardItem[]) {
   return result;
 }
 
+function productGroupKey(item: ProductCardItem) {
+  return asString(item.product_group_id) || asString(item.id);
+}
+
+function listingPriority(status: unknown) {
+  const value = asString(status).toUpperCase();
+  if (value === "IN_STOCK") {
+    return 0;
+  }
+  if (value === "PREORDER_OPEN") {
+    return 1;
+  }
+  if (value === "COMING_SOON") {
+    return 2;
+  }
+
+  return 3;
+}
+
+function representativeStatus(status: unknown) {
+  const value = asString(status || "UNKNOWN").toUpperCase();
+  return ["IN_STOCK", "PREORDER_OPEN", "COMING_SOON", "UNKNOWN"].includes(value)
+    ? value
+    : "";
+}
+
+async function enrichProductCards(items: ProductCardItem[]) {
+  const supabase = getReadSupabase();
+  const groupIds = Array.from(new Set(items.map(productGroupKey).filter(Boolean)));
+
+  if (!supabase || groupIds.length === 0) {
+    return items;
+  }
+
+  let response: { data: unknown[] | null; error: { message: string } | null } = await supabase
+    .from("product_groups")
+    .select("id, slug, display_name_kr, canonical_name_jp, line_type, product_type, main_image_url, manufacturers(name_kr, name)")
+    .in("id", groupIds);
+
+  if (response.error) {
+    response = await supabase
+      .from("product_groups")
+      .select("id, slug, display_name_kr, canonical_name_jp, line_type, product_type, main_image_url")
+      .in("id", groupIds);
+  }
+
+  if (response.error) {
+    return items;
+  }
+
+  const groupsById = new Map(
+    ((response.data ?? []) as AnyRecord[]).map((group) => [asString(group.id), group])
+  );
+
+  return items.map((item) => {
+    const groupId = productGroupKey(item);
+    const group = groupsById.get(groupId);
+    if (!group) {
+      return item;
+    }
+
+    return {
+      ...item,
+      product_group_id: groupId,
+      slug: asString(item.slug) || asString(group.slug),
+      display_name_kr: asString(item.display_name_kr) || asString(group.display_name_kr),
+      canonical_name_jp: asString(item.canonical_name_jp) || asString(group.canonical_name_jp),
+      manufacturer_name_kr:
+        asString(item.manufacturer_name_kr) || relationName(group.manufacturers, ["name_kr", "name"]),
+      line_type: asString(item.line_type) || asString(group.line_type),
+      product_type: asString(item.product_type) || asString(group.product_type),
+      main_image_url: asString(item.main_image_url) || asString(group.main_image_url),
+      image_url: asString(item.image_url) || asString(group.main_image_url)
+    };
+  });
+}
+
+async function attachRepresentativeListings(items: ProductCardItem[]) {
+  const supabase = getReadSupabase();
+  const groupIds = Array.from(new Set(items.map(productGroupKey).filter(Boolean)));
+
+  if (!supabase || groupIds.length === 0) {
+    return items;
+  }
+
+  const variantsResponse = await supabase
+    .from("product_variants")
+    .select("id, product_group_id")
+    .in("product_group_id", groupIds);
+
+  if (variantsResponse.error || !variantsResponse.data?.length) {
+    return items;
+  }
+
+  const variantToGroup = new Map(
+    ((variantsResponse.data ?? []) as AnyRecord[]).map((variant) => [
+      asString(variant.id),
+      asString(variant.product_group_id)
+    ])
+  );
+  const variantIds = Array.from(variantToGroup.keys()).filter(Boolean);
+
+  if (variantIds.length === 0) {
+    return items;
+  }
+
+  const listingsResponse = await supabase
+    .from("shop_listings")
+    .select("id, variant_id, price, currency, stock_status, is_visible, shops(name)")
+    .eq("is_visible", true)
+    .in("variant_id", variantIds)
+    .limit(variantIds.length * 8);
+
+  if (listingsResponse.error) {
+    return items;
+  }
+
+  const bestByGroup = new Map<string, ProductCardItem["representative_listing"]>();
+
+  for (const listing of (listingsResponse.data ?? []) as AnyRecord[]) {
+    const shop = asRecord(listing.shops);
+    const groupId = variantToGroup.get(asString(listing.variant_id)) ?? "";
+    const stockStatus = representativeStatus(listing.stock_status);
+
+    if (!groupId || !stockStatus) {
+      continue;
+    }
+
+    const candidate = {
+      price: listing.price as number | string | null,
+      currency: asString(listing.currency || "JPY"),
+      stock_status: stockStatus,
+      shop_name: asString(shop?.name)
+    };
+    const current = bestByGroup.get(groupId);
+
+    if (!current || listingPriority(candidate.stock_status) < listingPriority(current.stock_status)) {
+      bestByGroup.set(groupId, candidate);
+    }
+  }
+
+  return items.map((item) => ({
+    ...item,
+    representative_listing: bestByGroup.get(productGroupKey(item))
+  }));
+}
+
 async function runProductQuery(args: ProductSearchArgs) {
-  const supabase = getPublicSupabase();
+  const supabase = getReadSupabase();
   if (!supabase) {
     return { configured: false, items: [] as ProductCardItem[] };
   }
@@ -104,15 +257,19 @@ async function runProductQuery(args: ProductSearchArgs) {
     response = await query;
   }
 
+  const enrichedItems = await enrichProductCards(
+    ((response.data ?? []) as ProductCardItem[]).slice(0, limit)
+  );
+
   return {
     configured: true,
-    items: ((response.data ?? []) as ProductCardItem[]).slice(0, limit),
+    items: await attachRepresentativeListings(enrichedItems),
     error: response.error?.message
   };
 }
 
 async function aliasProductGroupIds(term: string) {
-  const supabase = getPublicSupabase();
+  const supabase = getReadSupabase();
   if (!supabase || !term) {
     return [];
   }
@@ -152,7 +309,7 @@ async function aliasProductGroupIds(term: string) {
 }
 
 async function productsByGroupIds(groupIds: string[], limit: number) {
-  const supabase = getPublicSupabase();
+  const supabase = getReadSupabase();
   if (!supabase || groupIds.length === 0) {
     return [];
   }
@@ -164,7 +321,8 @@ async function productsByGroupIds(groupIds: string[], limit: number) {
     .limit(limit);
 
   if (!byProductGroup.error) {
-    return (byProductGroup.data ?? []) as ProductCardItem[];
+    const enriched = await enrichProductCards((byProductGroup.data ?? []) as ProductCardItem[]);
+    return attachRepresentativeListings(enriched);
   }
 
   const byId = await supabase
@@ -173,7 +331,8 @@ async function productsByGroupIds(groupIds: string[], limit: number) {
     .in("id", groupIds)
     .limit(limit);
 
-  return ((byId.data ?? []) as ProductCardItem[]) || [];
+  const enriched = await enrichProductCards(((byId.data ?? []) as ProductCardItem[]) || []);
+  return attachRepresentativeListings(enriched);
 }
 
 export async function searchProducts(args: ProductSearchArgs) {
@@ -194,14 +353,14 @@ export async function searchProducts(args: ProductSearchArgs) {
 }
 
 export async function latestProducts(limit = 8) {
-  const supabase = getPublicSupabase();
+  const supabase = getReadSupabase();
   if (!supabase) {
     return { configured: false, items: [] as ProductCardItem[] };
   }
 
-  let response = await supabase
+  let response: { data: unknown[] | null; error: { message: string } | null } = await supabase
     .from("product_groups")
-    .select("*")
+    .select("*, manufacturers(name_kr, name)")
     .eq("status", "ACTIVE")
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -211,18 +370,21 @@ export async function latestProducts(limit = 8) {
       .from("product_groups")
       .select("*")
       .eq("status", "ACTIVE")
+      .order("created_at", { ascending: false })
       .limit(limit);
   }
 
   return {
     configured: true,
-    items: ((response.data ?? []) as AnyRecord[]).map(productGroupToCard),
+    items: await attachRepresentativeListings(
+      ((response.data ?? []) as AnyRecord[]).map(productGroupToCard)
+    ),
     error: response.error?.message
   };
 }
 
 export async function preorderProducts(limit = 8) {
-  const supabase = getPublicSupabase();
+  const supabase = getReadSupabase();
   if (!supabase) {
     return { configured: false, items: [] as ProductCardItem[] };
   }
@@ -231,6 +393,7 @@ export async function preorderProducts(limit = 8) {
   const response = await supabase
     .from("shop_listings")
     .select("stock_status, product_variants(product_groups(*))")
+    .eq("is_visible", true)
     .in("stock_status", preorderStatuses)
     .limit(limit * 4);
 
@@ -241,13 +404,13 @@ export async function preorderProducts(limit = 8) {
 
   return {
     configured: true,
-    items: dedupeProducts(groups).slice(0, limit),
+    items: await attachRepresentativeListings(dedupeProducts(groups).slice(0, limit)),
     error: response.error?.message
   };
 }
 
 export async function popularWorks(limit = 8) {
-  const supabase = getPublicSupabase();
+  const supabase = getReadSupabase();
   const labelFor = (row: AnyRecord) =>
     optionLabel(row, ["name_kr", "title_kr", "name_jp", "title_jp", "name", "title"]);
 

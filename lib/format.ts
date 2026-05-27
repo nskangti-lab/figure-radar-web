@@ -21,6 +21,10 @@ export function formatPrice(value: unknown, currency = "JPY") {
     return "-";
   }
 
+  if (currency.toUpperCase() === "KRW") {
+    return `${amount.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}원`;
+  }
+
   try {
     return new Intl.NumberFormat("ko-KR", {
       style: "currency",

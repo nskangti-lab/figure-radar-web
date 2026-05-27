@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, Factory } from "lucide-react";
+import { CalendarDays, Factory, Store } from "lucide-react";
 import { asDisplay, asString, formatMonth, formatPrice, productImage, productTitle } from "@/lib/format";
 import type { ProductCardItem } from "@/lib/types";
 
@@ -10,9 +10,10 @@ type ProductCardProps = {
 export function ProductCard({ product }: ProductCardProps) {
   const title = productTitle(product);
   const image = productImage(product);
-  const slug = product.slug || product.product_group_id || product.id;
+  const slug = asString(product.slug).trim();
   const href = slug ? `/products/${slug}` : "/search";
   const releaseMonth = asString(product.release_month_jp).trim();
+  const listing = product.representative_listing;
 
   return (
     <Link
@@ -48,6 +49,15 @@ export function ProductCard({ product }: ProductCardProps) {
             <span className="inline-flex items-center gap-2">
               <CalendarDays aria-hidden="true" className="h-4 w-4 text-coral" />
               {formatMonth(releaseMonth)}
+            </span>
+          ) : null}
+          {listing ? (
+            <span className="inline-flex items-center gap-2">
+              <Store aria-hidden="true" className="h-4 w-4 text-mint" />
+              <span className="truncate">
+                {asDisplay(listing.shop_name)} / {formatPrice(listing.price, asString(listing.currency || "JPY"))} /{" "}
+                {asDisplay(listing.stock_status)}
+              </span>
             </span>
           ) : null}
         </div>

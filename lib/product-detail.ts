@@ -1,5 +1,5 @@
 import { asString } from "@/lib/format";
-import { getPublicSupabase } from "@/lib/supabase/server";
+import { getPublicSupabase, getServiceSupabase } from "@/lib/supabase/server";
 import type { AnyRecord } from "@/lib/types";
 
 export type ProductDetailResult = {
@@ -10,7 +10,7 @@ export type ProductDetailResult = {
 };
 
 export async function getProductDetail(slug: string): Promise<ProductDetailResult> {
-  const supabase = getPublicSupabase();
+  const supabase = getServiceSupabase() ?? getPublicSupabase();
   if (!supabase) {
     return {
       configured: false,

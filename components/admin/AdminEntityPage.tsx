@@ -62,9 +62,16 @@ export async function AdminEntityPage({
                 <summary className="cursor-pointer list-none">
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-4">
-                      <p className="font-bold text-ink">
-                        {recordTitle(row, config.titleFields)}
-                      </p>
+                      <div className="min-w-0">
+                        <p className="truncate font-bold text-ink">
+                          {recordTitle(row, config.titleFields)}
+                        </p>
+                        {asString(row.id).trim() ? (
+                          <p className="mt-0.5 font-mono text-xs text-neutral-400">
+                            {shortId(row.id)}
+                          </p>
+                        ) : null}
+                      </div>
                       <span className="shrink-0 text-sm font-semibold text-mint">Edit</span>
                     </div>
                     <dl className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -101,11 +108,20 @@ function recordTitle(row: AnyRecord, titleFields: string[]) {
   for (const field of titleFields) {
     const value = asString(row[field]).trim();
     if (value) {
+      if (field === "id") {
+        return shortId(value);
+      }
+
       return value;
     }
   }
 
-  return asDisplay(row.id);
+  return shortId(row.id);
+}
+
+function shortId(value: unknown) {
+  const id = asString(value).trim();
+  return id ? id.slice(0, 8) : "-";
 }
 
 function displayColumnValue(row: AnyRecord, column: string) {
