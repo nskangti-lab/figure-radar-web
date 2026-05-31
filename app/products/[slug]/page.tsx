@@ -2,7 +2,15 @@ import { notFound } from "next/navigation";
 import { EnvNotice } from "@/components/EnvNotice";
 import { PurchaseButton } from "@/components/PurchaseButton";
 import { SafeImage } from "@/components/SafeImage";
-import { asDisplay, asString, formatMonth, formatPrice, relationName } from "@/lib/format";
+import {
+  asDisplay,
+  asString,
+  formatDate,
+  formatMonth,
+  formatPrice,
+  formatStockStatus,
+  relationName
+} from "@/lib/format";
 import { getProductDetail } from "@/lib/product-detail";
 
 type ProductPageProps = {
@@ -99,40 +107,65 @@ export default async function ProductPage({ params }: ProductPageProps) {
                         연결된 판매처가 없습니다.
                       </div>
                     ) : (
-                      <div className="divide-y divide-line">
-                        {listings.map((listing) => {
-                          const shopName =
-                            relationName(listing.shops, ["name_kr", "name", "raw_shop_name"]) ||
-                            asDisplay(listing.raw_shop_name, "판매처");
-                          const href = asString(listing.affiliate_url || listing.listing_url);
+                      <div className="overflow-x-auto">
+                        <table className="min-w-[840px] text-left text-sm">
+                          <thead className="border-b border-line bg-paper text-xs font-bold text-neutral-500">
+                            <tr>
+                              <th className="px-4 py-3">판매처명</th>
+                              <th className="px-4 py-3">가격</th>
+                              <th className="px-4 py-3">통화</th>
+                              <th className="px-4 py-3">재고 상태</th>
+                              <th className="px-4 py-3">비고</th>
+                              <th className="px-4 py-3">최종 확인일</th>
+                              <th className="px-4 py-3 text-right">구매</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-line bg-white">
+                            {listings.map((listing) => {
+                              const shopName =
+                                relationName(listing.shops, ["name_kr", "name", "raw_shop_name"]) ||
+                                asDisplay(listing.raw_shop_name, "판매처");
+                              const href = asString(listing.affiliate_url || listing.listing_url);
+                              const currency = asString(listing.currency, "JPY");
+                              const note = asDisplay(
+                                listing.shipping_note || listing.listing_notes || listing.note
+                              );
 
-                          return (
-                            <div
-                              key={asString(listing.id)}
-                              className="grid gap-3 bg-white p-4 md:grid-cols-[1fr_auto_auto_auto] md:items-center"
-                            >
-                              <div>
-                                <p className="font-bold text-ink">{shopName}</p>
-                                <p className="text-sm text-neutral-500">
-                                  재고 {asDisplay(listing.stock_status)}
-                                </p>
-                              </div>
-                              <p className="text-sm font-semibold text-ink">
-                                {formatPrice(listing.price, asString(listing.currency, "JPY"))}
-                              </p>
-                              {href ? (
-                                <PurchaseButton
-                                  href={href}
-                                  listingId={asString(listing.id)}
-                                  variantId={variantId}
-                                  productGroupId={asString(group.id)}
-                                />
-                              ) : (
-                                <span className="text-sm text-neutral-500">링크 없음</span>
-                              )}
-                            </div>
-                          );
-                        })}
+                              return (
+                                <tr key={asString(listing.id)} className="align-middle">
+                                  <td className="px-4 py-3 font-bold text-ink">{shopName}</td>
+                                  <td className="px-4 py-3 font-semibold text-ink">
+                                    {formatPrice(listing.price, currency)}
+                                  </td>
+                                  <td className="px-4 py-3 text-neutral-600">
+                                    {asDisplay(currency)}
+                                  </td>
+                                  <td className="px-4 py-3 text-neutral-700">
+                                    {formatStockStatus(listing.stock_status)}
+                                  </td>
+                                  <td className="max-w-56 px-4 py-3 text-neutral-600">
+                                    <span className="line-clamp-2">{note}</span>
+                                  </td>
+                                  <td className="px-4 py-3 text-neutral-600">
+                                    {formatDate(listing.last_checked_at)}
+                                  </td>
+                                  <td className="px-4 py-3 text-right">
+                                    {href ? (
+                                      <PurchaseButton
+                                        href={href}
+                                        listingId={asString(listing.id)}
+                                        variantId={variantId}
+                                        productGroupId={asString(group.id)}
+                                      />
+                                    ) : (
+                                      <span className="text-sm text-neutral-500">링크 없음</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     )}
                   </div>

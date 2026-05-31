@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { CalendarDays, Factory, Store } from "lucide-react";
 import { SafeImage } from "@/components/SafeImage";
-import { asDisplay, asString, formatMonth, formatPrice, productImage, productTitle } from "@/lib/format";
+import {
+  asDisplay,
+  asString,
+  formatMonth,
+  formatPrice,
+  formatStockStatus,
+  productImage,
+  productTitle
+} from "@/lib/format";
 import type { ProductCardItem } from "@/lib/types";
 
 type ProductCardProps = {
@@ -15,6 +23,10 @@ export function ProductCard({ product }: ProductCardProps) {
   const href = slug ? `/products/${slug}` : "/search";
   const releaseMonth = asString(product.release_month_jp).trim();
   const listing = product.representative_listing;
+  const listingCount =
+    typeof product.listing_count === "number" && Number.isFinite(product.listing_count)
+      ? product.listing_count
+      : 0;
 
   return (
     <Link
@@ -52,12 +64,19 @@ export function ProductCard({ product }: ProductCardProps) {
             <span className="grid grid-cols-[auto_1fr] gap-2">
               <Store aria-hidden="true" className="mt-0.5 h-4 w-4 text-mint" />
               <span className="min-w-0 leading-tight">
-                <span className="block truncate font-semibold text-ink">
-                  {asDisplay(listing.shop_name)}
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-semibold text-ink">
+                    {asDisplay(listing.shop_name)}
+                  </span>
+                  {listingCount > 0 ? (
+                    <span className="shrink-0 rounded-full bg-paper px-2 py-0.5 text-[11px] font-semibold text-neutral-600">
+                      판매처 {listingCount}곳
+                    </span>
+                  ) : null}
                 </span>
                 <span className="mt-0.5 block truncate text-xs text-neutral-500">
                   {formatPrice(listing.price, asString(listing.currency || "JPY"))} ·{" "}
-                  {asDisplay(listing.stock_status)}
+                  {formatStockStatus(listing.stock_status)}
                 </span>
               </span>
             </span>

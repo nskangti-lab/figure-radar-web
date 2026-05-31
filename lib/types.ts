@@ -19,6 +19,7 @@ export type ProductCardItem = AnyRecord & {
   main_image_url?: string;
   created_at?: string;
   stock_status?: string;
+  listing_count?: number;
   representative_listing?: {
     price?: number | string | null;
     currency?: string | null;

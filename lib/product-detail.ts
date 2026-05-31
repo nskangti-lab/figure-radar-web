@@ -20,6 +20,47 @@ function imageUrlFromRecord(record: AnyRecord | null | undefined) {
   return asString(record.image_url || record.url || record.src || record.public_url).trim();
 }
 
+function listingStatusPriority(status: unknown) {
+  const value = asString(status).toUpperCase();
+  if (value === "IN_STOCK") {
+    return 0;
+  }
+  if (value === "PREORDER_OPEN") {
+    return 1;
+  }
+  if (value === "COMING_SOON") {
+    return 2;
+  }
+  if (value === "UNKNOWN") {
+    return 3;
+  }
+  if (value === "PREORDER_CLOSED") {
+    return 4;
+  }
+  if (value === "SOLD_OUT") {
+    return 5;
+  }
+
+  return 6;
+}
+
+function listingPrice(value: unknown) {
+  const price = typeof value === "number" ? value : Number.parseFloat(asString(value));
+  return Number.isFinite(price) ? price : Number.POSITIVE_INFINITY;
+}
+
+function sortListings(listings: AnyRecord[]) {
+  return [...listings].sort((left, right) => {
+    const priorityDiff =
+      listingStatusPriority(left.stock_status) - listingStatusPriority(right.stock_status);
+    if (priorityDiff !== 0) {
+      return priorityDiff;
+    }
+
+    return listingPrice(left.price) - listingPrice(right.price);
+  });
+}
+
 async function productDetailImage(
   supabase: SupabaseReader,
   group: AnyRecord,
@@ -131,6 +172,7 @@ export async function getProductDetail(slug: string): Promise<ProductDetailResul
   let listingsResponse = await supabase
     .from("shop_listings")
     .select("*, shops(*)")
+    .eq("is_visible", true)
     .in("variant_id", variantIds)
     .order("updated_at", { ascending: false });
 
@@ -138,6 +180,7 @@ export async function getProductDetail(slug: string): Promise<ProductDetailResul
     listingsResponse = await supabase
       .from("shop_listings")
       .select("*")
+      .eq("is_visible", true)
       .in("variant_id", variantIds);
   }
 
@@ -154,6 +197,10 @@ export async function getProductDetail(slug: string): Promise<ProductDetailResul
     },
     {}
   );
+
+  for (const [variantId, variantListings] of Object.entries(listingsByVariant)) {
+    listingsByVariant[variantId] = sortListings(variantListings);
+  }
 
   return {
     configured: true,

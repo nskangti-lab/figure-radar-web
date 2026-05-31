@@ -60,6 +60,30 @@ export function formatMonth(value: unknown) {
   return text.length === 7 ? text.replace("-", ".") : text;
 }
 
+const stockStatusLabels: Record<string, string> = {
+  IN_STOCK: "재고 있음",
+  PREORDER_OPEN: "예약 가능",
+  PREORDER_CLOSED: "예약 종료",
+  COMING_SOON: "예정",
+  UNKNOWN: "확인 필요",
+  SOLD_OUT: "품절"
+};
+
+export function formatStockStatus(value: unknown) {
+  const status = asString(value).trim().toUpperCase();
+  return stockStatusLabels[status] || asDisplay(value);
+}
+
+export function formatDate(value: unknown) {
+  const text = asString(value).trim();
+  if (!text) {
+    return "-";
+  }
+
+  const [date] = text.split("T");
+  return date ? date.replaceAll("-", ".") : text;
+}
+
 export function productTitle(product: ProductCardItem) {
   return (
     asString(product.display_name_kr) ||

@@ -121,6 +121,11 @@ function listingPriority(status: unknown) {
   return 4;
 }
 
+function priceValue(value: unknown) {
+  const price = typeof value === "number" ? value : Number.parseFloat(asString(value));
+  return Number.isFinite(price) ? price : Number.POSITIVE_INFINITY;
+}
+
 function representativeStatus(status: unknown) {
   const value = asString(status || "UNKNOWN").toUpperCase();
   return ["IN_STOCK", "PREORDER_OPEN", "PREORDER_CLOSED", "COMING_SOON", "UNKNOWN"].includes(value)
@@ -322,13 +327,20 @@ async function attachRepresentativeListings(items: ProductCardItem[]) {
   }
 
   const bestByGroup = new Map<string, ProductCardItem["representative_listing"]>();
+  const countByGroup = new Map<string, number>();
 
   for (const listing of (listingsResponse.data ?? []) as AnyRecord[]) {
     const shop = asRecord(listing.shops);
     const groupId = variantToGroup.get(asString(listing.variant_id)) ?? "";
     const stockStatus = representativeStatus(listing.stock_status);
 
-    if (!groupId || !stockStatus) {
+    if (!groupId) {
+      continue;
+    }
+
+    countByGroup.set(groupId, (countByGroup.get(groupId) ?? 0) + 1);
+
+    if (!stockStatus) {
       continue;
     }
 
@@ -340,13 +352,21 @@ async function attachRepresentativeListings(items: ProductCardItem[]) {
     };
     const current = bestByGroup.get(groupId);
 
-    if (!current || listingPriority(candidate.stock_status) < listingPriority(current.stock_status)) {
+    if (
+      !current ||
+      listingPriority(candidate.stock_status) < listingPriority(current.stock_status) ||
+      (
+        listingPriority(candidate.stock_status) === listingPriority(current.stock_status) &&
+        priceValue(candidate.price) < priceValue(current.price)
+      )
+    ) {
       bestByGroup.set(groupId, candidate);
     }
   }
 
   return items.map((item) => ({
     ...item,
+    listing_count: countByGroup.get(productGroupKey(item)) ?? 0,
     representative_listing: bestByGroup.get(productGroupKey(item))
   }));
 }
