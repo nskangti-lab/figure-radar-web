@@ -111,16 +111,19 @@ function listingPriority(status: unknown) {
   if (value === "PREORDER_OPEN") {
     return 1;
   }
-  if (value === "COMING_SOON") {
+  if (value === "PREORDER_CLOSED") {
     return 2;
   }
+  if (value === "COMING_SOON") {
+    return 3;
+  }
 
-  return 3;
+  return 4;
 }
 
 function representativeStatus(status: unknown) {
   const value = asString(status || "UNKNOWN").toUpperCase();
-  return ["IN_STOCK", "PREORDER_OPEN", "COMING_SOON", "UNKNOWN"].includes(value)
+  return ["IN_STOCK", "PREORDER_OPEN", "PREORDER_CLOSED", "COMING_SOON", "UNKNOWN"].includes(value)
     ? value
     : "";
 }

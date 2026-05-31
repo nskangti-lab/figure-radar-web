@@ -6,6 +6,8 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { latestProducts, popularWorks, preorderProducts } from "@/lib/product-queries";
 import { asString } from "@/lib/format";
 
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   const [latest, preorders, works] = await Promise.all([
     latestProducts(8),

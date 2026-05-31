@@ -4,7 +4,10 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "피규어레이더",
-  description: "피규어 상품 검색 및 외부 판매처 중계 플랫폼"
+  description: "피규어 상품 검색 및 외부 판매처 중계 플랫폼",
+  other: {
+    "format-detection": "telephone=no, date=no, email=no, address=no"
+  }
 };
 
 export default function RootLayout({
@@ -13,8 +16,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko">
-      <body className="antialiased">
+    <html lang="ko" suppressHydrationWarning>
+      <body className="antialiased" suppressHydrationWarning>
         <header className="sticky top-0 z-30 border-b border-line bg-white/90 backdrop-blur">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
             <Link href="/" className="flex items-baseline gap-2">
