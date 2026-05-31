@@ -98,6 +98,45 @@ export async function saveAdminRecord(
   return { ok: true, message: "Saved." };
 }
 
+export async function deleteAdminRecord(
+  _previousState: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const entityKey = stringValue(formData.get("_entity"));
+  const id = stringValue(formData.get("id"));
+  const config = getAdminEntity(entityKey);
+  const supabase = getServiceSupabase();
+
+  if (!config) {
+    return { ok: false, message: "Unknown admin entity." };
+  }
+
+  if (entityKey !== "aliases") {
+    return { ok: false, message: "Delete is only available for aliases." };
+  }
+
+  if (!supabase) {
+    return {
+      ok: false,
+      message: "Supabase service role environment variables are not configured."
+    };
+  }
+
+  if (!id) {
+    return { ok: false, message: "id is required." };
+  }
+
+  const response = await supabase.from(config.table).delete().eq("id", id);
+  if (response.error) {
+    return { ok: false, message: response.error.message };
+  }
+
+  revalidatePath(config.path);
+  revalidatePath("/admin");
+
+  return { ok: true, message: "Deleted." };
+}
+
 export async function updateReviewStatus(formData: FormData) {
   const supabase = getServiceSupabase();
   const config = getAdminEntity("admin_review_queue");

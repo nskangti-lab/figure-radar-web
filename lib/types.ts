@@ -30,4 +30,5 @@ export type ProductCardItem = AnyRecord & {
 export type AdminOption = {
   id: string;
   label: string;
+  group?: string;
 };

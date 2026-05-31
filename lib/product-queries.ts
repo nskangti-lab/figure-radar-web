@@ -12,6 +12,18 @@ type ProductSearchArgs = {
 const productSearchFields = [
   "display_name_kr",
   "canonical_name_jp",
+  "display_name_en",
+  "work_name_kr",
+  "work_name_jp",
+  "character_name_kr",
+  "character_name_jp",
+  "manufacturer_name_kr",
+  "manufacturer_name_jp"
+];
+
+const fallbackProductSearchFields = [
+  "display_name_kr",
+  "canonical_name_jp",
   "work_name_kr",
   "character_name_kr",
   "manufacturer_name_kr"
@@ -21,10 +33,15 @@ function cleanSearchTerm(value: string) {
   return value.replace(/[%(),]/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function searchOr(term: string) {
-  return productSearchFields
+function searchOr(term: string, fields = productSearchFields) {
+  return fields
     .map((field) => `${field}.ilike.%${term}%`)
     .join(",");
+}
+
+function isSearchColumnError(error: { message?: string } | null | undefined) {
+  const message = asString(error?.message).toLowerCase();
+  return message.includes("column") || message.includes("schema cache");
 }
 
 function asRecord(value: unknown): AnyRecord | null {
@@ -106,6 +123,108 @@ function representativeStatus(status: unknown) {
   return ["IN_STOCK", "PREORDER_OPEN", "COMING_SOON", "UNKNOWN"].includes(value)
     ? value
     : "";
+}
+
+function imageUrlFromRecord(record: AnyRecord | null | undefined) {
+  if (!record) {
+    return "";
+  }
+
+  return asString(record.image_url || record.url || record.src || record.public_url).trim();
+}
+
+async function attachProductImages(items: ProductCardItem[]) {
+  const supabase = getReadSupabase();
+  const groupIds = Array.from(new Set(items.map(productGroupKey).filter(Boolean)));
+
+  if (!supabase || groupIds.length === 0) {
+    return items;
+  }
+
+  const imageByGroup = new Map<string, string>();
+  for (const item of items) {
+    const groupId = productGroupKey(item);
+    const imageUrl = asString(item.main_image_url).trim();
+    if (groupId && imageUrl) {
+      imageByGroup.set(groupId, imageUrl);
+    }
+  }
+
+  const imagesResponse = await supabase
+    .from("images")
+    .select("*")
+    .eq("target_type", "PRODUCT_GROUP")
+    .eq("is_primary", true)
+    .in("target_id", groupIds)
+    .limit(groupIds.length * 2);
+
+  if (!imagesResponse.error) {
+    for (const image of (imagesResponse.data ?? []) as AnyRecord[]) {
+      const groupId = asString(image.target_id);
+      const usageStatus = asString(image.usage_status).toUpperCase();
+      const imageUrl = imageUrlFromRecord(image);
+
+      if (
+        groupId &&
+        imageUrl &&
+        !imageByGroup.has(groupId) &&
+        usageStatus !== "HIDDEN" &&
+        usageStatus !== "REMOVED"
+      ) {
+        imageByGroup.set(groupId, imageUrl);
+      }
+    }
+  }
+
+  const missingGroupIds = groupIds.filter((groupId) => !imageByGroup.has(groupId));
+  if (missingGroupIds.length) {
+    const variantsResponse = await supabase
+      .from("product_variants")
+      .select("id, product_group_id")
+      .in("product_group_id", missingGroupIds);
+
+    if (!variantsResponse.error && variantsResponse.data?.length) {
+      const variantToGroup = new Map(
+        ((variantsResponse.data ?? []) as AnyRecord[]).map((variant) => [
+          asString(variant.id),
+          asString(variant.product_group_id)
+        ])
+      );
+      const variantIds = Array.from(variantToGroup.keys()).filter(Boolean);
+
+      if (variantIds.length) {
+        const listingsResponse = await supabase
+          .from("shop_listings")
+          .select("*")
+          .eq("is_visible", true)
+          .in("variant_id", variantIds)
+          .limit(variantIds.length * 4);
+
+        if (!listingsResponse.error) {
+          for (const listing of (listingsResponse.data ?? []) as AnyRecord[]) {
+            const groupId = variantToGroup.get(asString(listing.variant_id)) ?? "";
+            const imageUrl = imageUrlFromRecord(listing);
+            if (groupId && imageUrl && !imageByGroup.has(groupId)) {
+              imageByGroup.set(groupId, imageUrl);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return items.map((item) => {
+    const imageUrl = imageByGroup.get(productGroupKey(item)) ?? "";
+    if (!imageUrl) {
+      return item;
+    }
+
+    return {
+      ...item,
+      image_url: imageUrl,
+      representative_image_url: asString(item.representative_image_url) || imageUrl
+    };
+  });
 }
 
 async function enrichProductCards(items: ProductCardItem[]) {
@@ -237,29 +356,39 @@ async function runProductQuery(args: ProductSearchArgs) {
 
   const limit = args.limit ?? 24;
   const term = cleanSearchTerm(args.q ?? "");
-  let query = supabase.from("product_search_view").select("*").limit(limit);
+  const buildQuery = (fields = productSearchFields) => {
+    let query = supabase.from("product_search_view").select("*").limit(limit);
 
-  if (term) {
-    query = query.or(searchOr(term));
+    if (term) {
+      query = query.or(searchOr(term, fields));
+    }
+
+    if (args.lineType) {
+      query = query.eq("line_type", args.lineType);
+    }
+
+    if (args.productType) {
+      query = query.eq("product_type", args.productType);
+    }
+
+    return query;
+  };
+
+  let response = await buildQuery().order("created_at", { ascending: false });
+
+  if (term && response.error && isSearchColumnError(response.error)) {
+    response = await buildQuery(fallbackProductSearchFields).order("created_at", {
+      ascending: false
+    });
   }
-
-  if (args.lineType) {
-    query = query.eq("line_type", args.lineType);
-  }
-
-  if (args.productType) {
-    query = query.eq("product_type", args.productType);
-  }
-
-  let response = await query.order("created_at", { ascending: false });
 
   if (response.error) {
-    response = await query;
+    response = await buildQuery(term && isSearchColumnError(response.error) ? fallbackProductSearchFields : productSearchFields);
   }
 
-  const enrichedItems = await enrichProductCards(
+  const enrichedItems = await attachProductImages(await enrichProductCards(
     ((response.data ?? []) as ProductCardItem[]).slice(0, limit)
-  );
+  ));
 
   return {
     configured: true,
@@ -274,38 +403,68 @@ async function aliasProductGroupIds(term: string) {
     return [];
   }
 
-  const columns = ["alias_text", "alias", "name", "keyword"];
+  const { data, error } = await supabase
+    .from("aliases")
+    .select("target_type, target_id, alias")
+    .ilike("alias", `%${term}%`)
+    .limit(100);
 
-  for (const column of columns) {
-    const { data, error } = await supabase
-      .from("aliases")
-      .select("*")
-      .ilike(column, `%${term}%`)
-      .limit(50);
+  if (error || !data?.length) {
+    return [];
+  }
 
-    if (error) {
+  const workIds: string[] = [];
+  const characterIds: string[] = [];
+  const manufacturerIds: string[] = [];
+  const groupIds = new Set<string>();
+
+  for (const alias of data as AnyRecord[]) {
+    const targetType = asString(alias.target_type).toUpperCase();
+    const targetId = asString(alias.target_id);
+    if (!targetId) {
       continue;
     }
 
-    return ((data ?? []) as AnyRecord[])
-      .map((row) => {
-        const explicit = asString(row.product_group_id);
-        if (explicit) {
-          return explicit;
-        }
-
-        const targetType = asString(row.target_type || row.entity_type).toLowerCase();
-        const targetId = asString(row.target_id || row.entity_id);
-        if (targetId && targetType.includes("product")) {
-          return targetId;
-        }
-
-        return "";
-      })
-      .filter(Boolean);
+    if (targetType === "WORK" || targetType === "WORKS") {
+      workIds.push(targetId);
+    } else if (targetType === "CHARACTER" || targetType === "CHARACTERS") {
+      characterIds.push(targetId);
+    } else if (targetType === "MANUFACTURER" || targetType === "MANUFACTURERS") {
+      manufacturerIds.push(targetId);
+    } else if (targetType === "PRODUCT_GROUP" || targetType === "PRODUCT_GROUPS") {
+      groupIds.add(targetId);
+    }
   }
 
-  return [];
+  const collectGroupIds = async (column: string, ids: string[]) => {
+    const uniqueIds = Array.from(new Set(ids)).filter(Boolean);
+    if (!uniqueIds.length) {
+      return;
+    }
+
+    const response = await supabase
+      .from("product_groups")
+      .select("id")
+      .in(column, uniqueIds)
+      .limit(200);
+
+    if (response.error) {
+      return;
+    }
+
+    for (const group of (response.data ?? []) as AnyRecord[]) {
+      const groupId = asString(group.id);
+      if (groupId) {
+        groupIds.add(groupId);
+      }
+    }
+  };
+
+  await collectGroupIds("work_id", workIds);
+  await collectGroupIds("character_id", characterIds);
+  await collectGroupIds("manufacturer_id", manufacturerIds);
+
+  return Array.from(groupIds);
 }
 
 async function productsByGroupIds(groupIds: string[], limit: number) {
@@ -320,8 +479,10 @@ async function productsByGroupIds(groupIds: string[], limit: number) {
     .in("product_group_id", groupIds)
     .limit(limit);
 
-  if (!byProductGroup.error) {
-    const enriched = await enrichProductCards((byProductGroup.data ?? []) as ProductCardItem[]);
+  if (!byProductGroup.error && byProductGroup.data?.length) {
+    const enriched = await attachProductImages(
+      await enrichProductCards((byProductGroup.data ?? []) as ProductCardItem[])
+    );
     return attachRepresentativeListings(enriched);
   }
 
@@ -331,7 +492,27 @@ async function productsByGroupIds(groupIds: string[], limit: number) {
     .in("id", groupIds)
     .limit(limit);
 
-  const enriched = await enrichProductCards(((byId.data ?? []) as ProductCardItem[]) || []);
+  let fallbackItems = ((byId.data ?? []) as ProductCardItem[]) || [];
+
+  if (!fallbackItems.length) {
+    let groupsResponse: { data: unknown[] | null; error: { message: string } | null } = await supabase
+      .from("product_groups")
+      .select("*, manufacturers(name_kr, name)")
+      .in("id", groupIds)
+      .limit(limit);
+
+    if (groupsResponse.error) {
+      groupsResponse = await supabase
+        .from("product_groups")
+        .select("*")
+        .in("id", groupIds)
+        .limit(limit);
+    }
+
+    fallbackItems = ((groupsResponse.data ?? []) as AnyRecord[]).map(productGroupToCard);
+  }
+
+  const enriched = await attachProductImages(await enrichProductCards(fallbackItems));
   return attachRepresentativeListings(enriched);
 }
 
@@ -377,7 +558,7 @@ export async function latestProducts(limit = 8) {
   return {
     configured: true,
     items: await attachRepresentativeListings(
-      ((response.data ?? []) as AnyRecord[]).map(productGroupToCard)
+      await attachProductImages(((response.data ?? []) as AnyRecord[]).map(productGroupToCard))
     ),
     error: response.error?.message
   };
@@ -404,7 +585,9 @@ export async function preorderProducts(limit = 8) {
 
   return {
     configured: true,
-    items: await attachRepresentativeListings(dedupeProducts(groups).slice(0, limit)),
+    items: await attachRepresentativeListings(
+      await attachProductImages(dedupeProducts(groups).slice(0, limit))
+    ),
     error: response.error?.message
   };
 }

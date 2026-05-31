@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CalendarDays, Factory, Store } from "lucide-react";
+import { SafeImage } from "@/components/SafeImage";
 import { asDisplay, asString, formatMonth, formatPrice, productImage, productTitle } from "@/lib/format";
 import type { ProductCardItem } from "@/lib/types";
 
@@ -21,17 +22,13 @@ export function ProductCard({ product }: ProductCardProps) {
       className="group flex min-h-[320px] flex-col overflow-hidden rounded-lg border border-line bg-white transition hover:-translate-y-0.5 hover:shadow-soft"
     >
       <div className="flex aspect-[4/3] items-center justify-center bg-neutral-100">
-        {image ? (
-          <img
-            src={image}
-            alt={title}
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-          />
-        ) : (
-          <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-paper text-2xl font-bold text-mint">
-            {title.slice(0, 1)}
-          </div>
-        )}
+        <SafeImage
+          src={image}
+          alt={title}
+          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+          fallbackClassName="flex h-20 w-20 items-center justify-center rounded-lg bg-paper text-2xl font-bold text-mint"
+          fallbackText={title.slice(0, 1)}
+        />
       </div>
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div>
@@ -52,11 +49,16 @@ export function ProductCard({ product }: ProductCardProps) {
             </span>
           ) : null}
           {listing ? (
-            <span className="inline-flex items-center gap-2">
-              <Store aria-hidden="true" className="h-4 w-4 text-mint" />
-              <span className="truncate">
-                {asDisplay(listing.shop_name)} / {formatPrice(listing.price, asString(listing.currency || "JPY"))} /{" "}
-                {asDisplay(listing.stock_status)}
+            <span className="grid grid-cols-[auto_1fr] gap-2">
+              <Store aria-hidden="true" className="mt-0.5 h-4 w-4 text-mint" />
+              <span className="min-w-0 leading-tight">
+                <span className="block truncate font-semibold text-ink">
+                  {asDisplay(listing.shop_name)}
+                </span>
+                <span className="mt-0.5 block truncate text-xs text-neutral-500">
+                  {formatPrice(listing.price, asString(listing.currency || "JPY"))} ·{" "}
+                  {asDisplay(listing.stock_status)}
+                </span>
               </span>
             </span>
           ) : null}

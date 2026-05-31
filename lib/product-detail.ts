@@ -7,7 +7,64 @@ export type ProductDetailResult = {
   group: AnyRecord | null;
   variants: AnyRecord[];
   listingsByVariant: Record<string, AnyRecord[]>;
+  imageUrl?: string;
 };
+
+type SupabaseReader = NonNullable<ReturnType<typeof getPublicSupabase>>;
+
+function imageUrlFromRecord(record: AnyRecord | null | undefined) {
+  if (!record) {
+    return "";
+  }
+
+  return asString(record.image_url || record.url || record.src || record.public_url).trim();
+}
+
+async function productDetailImage(
+  supabase: SupabaseReader,
+  group: AnyRecord,
+  listings: AnyRecord[] = []
+) {
+  const mainImageUrl = asString(group.main_image_url).trim();
+  if (mainImageUrl) {
+    return mainImageUrl;
+  }
+
+  const groupId = asString(group.id);
+  if (groupId) {
+    const imagesResponse = await supabase
+      .from("images")
+      .select("*")
+      .eq("target_type", "PRODUCT_GROUP")
+      .eq("target_id", groupId)
+      .eq("is_primary", true)
+      .limit(5);
+
+    if (!imagesResponse.error) {
+      for (const image of (imagesResponse.data ?? []) as AnyRecord[]) {
+        const usageStatus = asString(image.usage_status).toUpperCase();
+        const imageUrl = imageUrlFromRecord(image);
+        if (imageUrl && usageStatus !== "HIDDEN" && usageStatus !== "REMOVED") {
+          return imageUrl;
+        }
+      }
+    }
+  }
+
+  for (const listing of listings) {
+    const isVisible = listing.is_visible === true || asString(listing.is_visible).toLowerCase() === "true";
+    if (!isVisible) {
+      continue;
+    }
+
+    const imageUrl = imageUrlFromRecord(listing);
+    if (imageUrl) {
+      return imageUrl;
+    }
+  }
+
+  return "";
+}
 
 export async function getProductDetail(slug: string): Promise<ProductDetailResult> {
   const supabase = getServiceSupabase() ?? getPublicSupabase();
@@ -66,7 +123,8 @@ export async function getProductDetail(slug: string): Promise<ProductDetailResul
       configured: true,
       group,
       variants,
-      listingsByVariant: {}
+      listingsByVariant: {},
+      imageUrl: await productDetailImage(supabase, group)
     };
   }
 
@@ -101,6 +159,7 @@ export async function getProductDetail(slug: string): Promise<ProductDetailResul
     configured: true,
     group,
     variants,
-    listingsByVariant
+    listingsByVariant,
+    imageUrl: await productDetailImage(supabase, group, listings)
   };
 }

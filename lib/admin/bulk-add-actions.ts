@@ -243,7 +243,8 @@ async function saveRow(row: BulkAddRow, rowNumber: number): Promise<BulkAddRowRe
       status: "ACTIVE",
       version_name_kr: nullable(normalizedRow.version_kr),
       version_name_jp: nullable(normalizedRow.version_jp),
-      version_name_en: nullable(normalizedRow.version_en)
+      version_name_en: nullable(normalizedRow.version_en),
+      main_image_url: nullable(normalizedRow.main_image_url)
     })
     .select("id, slug")
     .single();

@@ -5,6 +5,7 @@ export type AdminField = {
   required?: boolean;
   placeholder?: string;
   defaultValue?: string | boolean;
+  options?: { id: string; label: string }[];
 };
 
 export type AdminEntityConfig = {
@@ -25,6 +26,7 @@ export type AdminEntityKey =
   | "product_groups"
   | "product_variants"
   | "shop_listings"
+  | "aliases"
   | "admin_review_queue";
 
 export const adminEntities: Record<AdminEntityKey, AdminEntityConfig> = {
@@ -111,6 +113,7 @@ export const adminEntities: Record<AdminEntityKey, AdminEntityConfig> = {
       { name: "product_type", label: "Product Type", required: true, placeholder: "figure" },
       { name: "line_type", label: "Line Type", required: true, placeholder: "scale, nendoroid" },
       { name: "scale", label: "Scale", placeholder: "1/7" },
+      { name: "main_image_url", label: "Main Image URL", type: "url" },
       { name: "status", label: "Status" },
       { name: "version_name_kr", label: "Version Name KR" },
       { name: "version_name_jp", label: "Version Name JP" },
@@ -167,6 +170,45 @@ export const adminEntities: Record<AdminEntityKey, AdminEntityConfig> = {
       "review_status"
     ]
   },
+  aliases: {
+    key: "aliases",
+    title: "Aliases",
+    table: "aliases",
+    path: "/admin/aliases",
+    fields: [
+      {
+        name: "target_type",
+        label: "Target Type",
+        type: "select",
+        required: true,
+        options: [
+          { id: "WORK", label: "WORK" },
+          { id: "CHARACTER", label: "CHARACTER" },
+          { id: "MANUFACTURER", label: "MANUFACTURER" },
+          { id: "PRODUCT_GROUP", label: "PRODUCT_GROUP" }
+        ]
+      },
+      { name: "target_id", label: "Target", type: "select", required: true },
+      { name: "alias", label: "Alias", required: true },
+      {
+        name: "alias_type",
+        label: "Alias Type",
+        type: "select",
+        options: [
+          { id: "OFFICIAL", label: "OFFICIAL" },
+          { id: "COMMON", label: "COMMON" },
+          { id: "ABBREVIATION", label: "ABBREVIATION" },
+          { id: "MISSPELLING", label: "MISSPELLING" },
+          { id: "JP", label: "JP" },
+          { id: "EN", label: "EN" },
+          { id: "KR", label: "KR" }
+        ]
+      },
+      { name: "language", label: "Language", defaultValue: "ko" }
+    ],
+    titleFields: ["alias"],
+    listColumns: ["target_type", "target_id", "alias_type", "language"]
+  },
   admin_review_queue: {
     key: "admin_review_queue",
     title: "Review Queue",
@@ -188,6 +230,7 @@ export const adminNav = [
   { href: "/admin/product-groups", label: "Product Groups" },
   { href: "/admin/product-variants", label: "Product Variants" },
   { href: "/admin/shop-listings", label: "Shop Listings" },
+  { href: "/admin/aliases", label: "Aliases" },
   { href: "/admin/review-queue", label: "Review Queue" }
 ];
 

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { EnvNotice } from "@/components/EnvNotice";
 import { PurchaseButton } from "@/components/PurchaseButton";
+import { SafeImage } from "@/components/SafeImage";
 import { asDisplay, asString, formatMonth, formatPrice, relationName } from "@/lib/format";
 import { getProductDetail } from "@/lib/product-detail";
 
@@ -31,23 +32,37 @@ export default async function ProductPage({ params }: ProductPageProps) {
   return (
     <div className="space-y-8">
       <section className="rounded-lg border border-line bg-white p-5 shadow-soft">
-        <p className="mb-2 text-sm font-bold text-coral">Product Group</p>
-        <h1 className="text-3xl font-black leading-tight text-ink">{title}</h1>
-        {group.canonical_name_jp ? (
-          <p className="mt-2 text-neutral-600">{asDisplay(group.canonical_name_jp)}</p>
-        ) : null}
+        <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
+          <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg bg-neutral-100">
+            <SafeImage
+              src={detail.imageUrl}
+              alt={title}
+              className="h-full w-full object-cover"
+              fallbackClassName="flex h-24 w-24 items-center justify-center rounded-lg bg-paper text-3xl font-bold text-mint"
+              fallbackText={title.slice(0, 1)}
+            />
+          </div>
 
-        <dl className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <InfoTerm label="작품" value={workName || group.work_name_kr} />
-          <InfoTerm label="캐릭터" value={characterName || group.character_name_kr} />
-          <InfoTerm label="제조사" value={manufacturerName || group.manufacturer_name_kr} />
-          <InfoTerm label="라인업" value={group.line_type} />
-          <InfoTerm label="스케일" value={group.scale} />
-          <InfoTerm
-            label="버전"
-            value={group.version_name_kr || group.version_name_jp || group.version_name_en}
-          />
-        </dl>
+          <div>
+            <p className="mb-2 text-sm font-bold text-coral">Product Group</p>
+            <h1 className="text-3xl font-black leading-tight text-ink">{title}</h1>
+            {group.canonical_name_jp ? (
+              <p className="mt-2 text-neutral-600">{asDisplay(group.canonical_name_jp)}</p>
+            ) : null}
+
+            <dl className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <InfoTerm label="작품" value={workName || group.work_name_kr} />
+              <InfoTerm label="캐릭터" value={characterName || group.character_name_kr} />
+              <InfoTerm label="제조사" value={manufacturerName || group.manufacturer_name_kr} />
+              <InfoTerm label="라인업" value={group.line_type} />
+              <InfoTerm label="스케일" value={group.scale} />
+              <InfoTerm
+                label="버전"
+                value={group.version_name_kr || group.version_name_jp || group.version_name_en}
+              />
+            </dl>
+          </div>
+        </div>
       </section>
 
       <section className="space-y-4">
@@ -63,10 +78,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               const listings = detail.listingsByVariant[variantId] ?? [];
 
               return (
-                <article
-                  key={variantId}
-                  className="rounded-lg border border-line bg-white p-4"
-                >
+                <article key={variantId} className="rounded-lg border border-line bg-white p-4">
                   <div className="flex flex-col justify-between gap-3 sm:flex-row">
                     <div>
                       <h3 className="font-bold text-ink">

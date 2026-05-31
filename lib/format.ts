@@ -13,6 +13,14 @@ export function asDisplay(value: unknown, fallback = "-") {
   return text || fallback;
 }
 
+function formatWholeNumber(value: number) {
+  const rounded = Math.round(value);
+  const sign = rounded < 0 ? "-" : "";
+  return `${sign}${Math.abs(rounded)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+}
+
 export function formatPrice(value: unknown, currency = "JPY") {
   const amount =
     typeof value === "number" ? value : Number.parseFloat(asString(value));
@@ -21,19 +29,26 @@ export function formatPrice(value: unknown, currency = "JPY") {
     return "-";
   }
 
-  if (currency.toUpperCase() === "KRW") {
-    return `${amount.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}원`;
+  const normalizedCurrency = asString(currency, "JPY").trim().toUpperCase() || "JPY";
+  const formattedAmount = formatWholeNumber(amount);
+
+  if (normalizedCurrency === "KRW") {
+    return `${formattedAmount}원`;
   }
 
-  try {
-    return new Intl.NumberFormat("ko-KR", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0
-    }).format(amount);
-  } catch {
-    return `${amount.toLocaleString("ko-KR")} ${currency}`;
+  if (normalizedCurrency === "JPY") {
+    return `JP¥${formattedAmount}`;
   }
+
+  if (normalizedCurrency === "USD") {
+    return `US$${formattedAmount}`;
+  }
+
+  if (normalizedCurrency === "EUR") {
+    return `€${formattedAmount}`;
+  }
+
+  return `${formattedAmount} ${normalizedCurrency}`;
 }
 
 export function formatMonth(value: unknown) {
